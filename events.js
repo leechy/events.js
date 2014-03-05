@@ -1,5 +1,6 @@
 var events = {
-    list: {},
+    domList: {},
+    directList: {},
 
     /**
      * Triger event
@@ -16,7 +17,11 @@ var events = {
 
         // Dealing with the optional arguments
         if (arguments.length === 3) {
-            elements = document.querySelectorAll(selector);
+            if (typeof selector === 'object') {
+                elements = (selector.length)? selector : [selector];
+            } else {
+                elements = document.querySelectorAll(selector);
+            }
             details = data;
         } else {
             elements = [document];
@@ -26,8 +31,9 @@ var events = {
         
         // If the event is in the list of domless events,
         // then just trigger all the callbacks for all selectors
-        if (events.list[eventName + ': ' + selector]) {
-            var callbacks = events.list[eventName + selector]
+        var descriptor = eventName + ': ' + selector;
+        if (events.directList[descriptor]) {
+            var callbacks = events.directList[descriptor]
             for (var i = 0, leni = callbacks.length; i < leni; i++) {
                 for (var j = 0, lenj = elements.length; j < lenj; j++) {
                     // Trying to emulate the event object
@@ -73,30 +79,55 @@ var events = {
 
         // Dealing with optional arguments
         if (typeof selector === 'function') {
-            // there isn't custom selector
+            // there isn't custom selector, so we're handling event at document level
             elements = [document];
             callbackFn = selector;
             notDomEvent = callback;
             selector = 'document';
         } else {
-            elements = document.querySelectorAll(selector);
+            if (typeof selector === 'object') {
+            	// selector is object – either nodelist or single element
+            	if (selector.tagName || typeof selector.length !== 'number') {
+            		// wrapping single element in an array for common cycle
+	                elements = [selector];
+	            } else {
+            		// probably a node list
+	            	elements = selector;
+            	}
+            } else {
+            	// if it's not an object, it's probably a string
+                elements = document.querySelectorAll(selector);
+            }
             callbackFn = callback;
             notDomEvent = domless;
         }
-        
-        if (notDomEvent) {
-            if (!events.list[eventName + ': ' + selector]) {
-                events.list[eventName + ': ' + selector] = [];
-            }
-            events.list[eventName + ': ' + selector].push(callback);
-        } else {
-            for (var i = 0, leni = elements.length; i < leni; i++) {
-                elements[i].addEventListener(eventName, callbackFn);
-            }
+
+        // Cache fn pointers to call them directly or remove them
+        var descriptor = eventName + ': ' + selector;
+        var list = (domless)? events.directList : events.domList;
+        if (!list[descriptor]) {
+            list[descriptor] = [];
+        }
+        list[descriptor].push(callback);
+
+        // Attach dom event handlers
+        for (var i = 0, leni = elements.length; i < leni; i++) {
+            elements[i].addEventListener(eventName, callbackFn);
         }
 	},
 	
-	removeHandle: function() {
+	
+	/**
+	 * Removes event handle
+	 * 
+	 * @param {string}    eventName
+	 * @param {string}    selector   (optional) CSS-selector of the DOM element
+	 *                               listening for event. If not present it's
+	 *                               document.
+	 * @param {function}  callback   (optional) if not present, all handles are
+	 *                               removed
+	 */
+	removeHandle: function(eventName, selector, callback) {
 	    
 	}
 }
